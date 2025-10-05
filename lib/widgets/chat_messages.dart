@@ -1,9 +1,10 @@
-// In lib/widgets/chat_messages.dart
+// Path: lib/widgets/chat_messages.dart
 
 import 'package:chat_app/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chat_app/services/gemini_service.dart';
 
 class ChatMessages extends StatelessWidget {
   const ChatMessages({super.key});
@@ -23,7 +24,7 @@ class ChatMessages extends StatelessWidget {
         }
 
         if (!chatSnapshot.hasData || chatSnapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink(); // Empty space
+          return const SizedBox.shrink();
         }
 
         final loadedMessages = chatSnapshot.data!.docs;
@@ -34,6 +35,12 @@ class ChatMessages extends StatelessWidget {
           itemCount: loadedMessages.length,
           itemBuilder: (ctx, index) {
             final chatMessage = loadedMessages[index].data();
+
+            // Extract isAIResponse and use fallback check (using AI ID)
+            final isAIResponse = chatMessage.containsKey('isAIResponse')
+                ? chatMessage['isAIResponse'] as bool
+                : chatMessage['userId'] == GeminiService.aiUserId;
+
             final nextChatMessage = index + 1 < loadedMessages.length
                 ? loadedMessages[index + 1].data()
                 : null;
@@ -44,14 +51,14 @@ class ChatMessages extends StatelessWidget {
 
             final isNextUserSame = nextMessageUserId == currentMessageUserId;
 
-            // ✅ Get the timestamp from the message data
             final timestamp = chatMessage['createdAt'] as Timestamp;
 
             if (isNextUserSame) {
               return MessageBubble.next(
                 message: chatMessage['text'],
                 isMe: authenticatedUser.uid == currentMessageUserId,
-                createdAt: timestamp, // ✅ Pass the timestamp
+                createdAt: timestamp,
+                isAIResponse: isAIResponse, // ✅ PASS NEW PROPERTY
               );
             } else {
               return MessageBubble.first(
@@ -59,7 +66,8 @@ class ChatMessages extends StatelessWidget {
                 username: chatMessage['username'],
                 message: chatMessage['text'],
                 isMe: authenticatedUser.uid == currentMessageUserId,
-                createdAt: timestamp, // ✅ Pass the timestamp
+                createdAt: timestamp,
+                isAIResponse: isAIResponse, // ✅ PASS NEW PROPERTY
               );
             }
           },

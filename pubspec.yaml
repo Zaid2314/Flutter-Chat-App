@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    #other dependencies
+  flutter_gemini: ^3.0.0
 
   # All packages are now correctly listed together
   cupertino_icons: ^1.0.8

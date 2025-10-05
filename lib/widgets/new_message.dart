@@ -1,4 +1,6 @@
-import 'package:chat_app/services/gemini_service.dart'; // Humari service file
+// Path: lib/widgets/new_message.dart
+
+import 'package:chat_app/services/gemini_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,14 +9,12 @@ class NewMessage extends StatefulWidget {
   const NewMessage({super.key});
 
   @override
-  State<NewMessage> createState() {
-    return _NewMessageState();
-  }
+  State<NewMessage> createState() => _NewMessageState();
 }
 
 class _NewMessageState extends State<NewMessage> {
   final _messageController = TextEditingController();
-  final GeminiService _geminiService = GeminiService(); // Service ka instance
+  final GeminiService _geminiService = GeminiService();
 
   @override
   void dispose() {
@@ -22,45 +22,56 @@ class _NewMessageState extends State<NewMessage> {
     super.dispose();
   }
 
-  // AI se response lene aur save karne ka function
+  // Function to get response from AI and save it to Firestore
   Future<void> _getAiResponse(String prompt) async {
-    final geminiResponse = await _geminiService.generateResponse(prompt);
+    try {
+      final geminiResponse = await _geminiService.generateResponse(prompt);
 
-    // AI ka response Firestore me save karein
-    FirebaseFirestore.instance.collection('chat').add({
-      'text': geminiResponse,
-      'createdAt': Timestamp.now(),
-      'userId': 'gemini-bot', // Bot ke liye ek unique ID
-      'username': '@ai',      // Bot ka username
-      'userImage': 'assets/images/gemini_avatar.png', // Bot ka avatar
-    });
+      await FirebaseFirestore.instance.collection('chat').add({
+        'text': geminiResponse,
+        'createdAt': Timestamp.now(),
+        'userId': GeminiService.aiUserId, // Special ID for AI
+        'username': '@ai',
+        'userImage': null, // AI does not have an image
+        'isAIResponse': true, // ✅ CRITICAL: Flag for UI styling
+      });
+    } catch (e) {
+      print('Firestore save error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to send AI response.')),
+        );
+      }
+    }
   }
 
   Future<void> _submitMessage() async {
     final enteredMessage = _messageController.text;
 
-    if (enteredMessage.trim().isEmpty) {
-      return;
-    }
+    if (enteredMessage.trim().isEmpty) return;
 
     final user = FirebaseAuth.instance.currentUser!;
     _messageController.clear();
     FocusScope.of(context).unfocus();
 
-    // Pehle user ka message database me save karo
+    // Fetch user data
     final userData = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    FirebaseFirestore.instance.collection('chat').add({
+
+    // 1. Save the user's message first
+    await FirebaseFirestore.instance.collection('chat').add({
       'text': enteredMessage,
       'createdAt': Timestamp.now(),
       'userId': user.uid,
       'username': userData.data()!['username'],
       'userImage': userData.data()!['userImage'],
+      'isAIResponse': false, // User message is always false
     });
 
-    // Ab check karo ki kya yeh AI command hai
+    // 2. Check for the AI command and trigger AI response
     if (enteredMessage.trim().toLowerCase().startsWith('@ai ')) {
       final prompt = enteredMessage.trim().substring(4);
       if (prompt.isNotEmpty) {
+        // Run AI generation and saving without awaiting to keep UI responsive
         _getAiResponse(prompt);
       }
     }
@@ -87,7 +98,7 @@ class _NewMessageState extends State<NewMessage> {
             color: Theme.of(context).colorScheme.primary,
             icon: const Icon(Icons.send),
             onPressed: _submitMessage,
-          )
+          ),
         ],
       ),
     );

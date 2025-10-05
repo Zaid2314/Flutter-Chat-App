@@ -1,4 +1,4 @@
-// In lib/widgets/message_bubble.dart
+// Path: lib/widgets/message_bubble.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +12,7 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     required this.createdAt,
+    required this.isAIResponse, // 🎯 NEW: Must be passed
   }) : isFirstInSequence = true;
 
   const MessageBubble.next({
@@ -19,6 +20,7 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMe,
     required this.createdAt,
+    required this.isAIResponse, // 🎯 NEW: Must be passed
   })  : isFirstInSequence = false,
         userImage = null,
         username = null;
@@ -29,36 +31,74 @@ class MessageBubble extends StatelessWidget {
   final String message;
   final bool isMe;
   final Timestamp createdAt;
+  final bool isAIResponse; // 🎯 NEW PROPERTY
+
+  // Helper function to handle both network and asset images
+  ImageProvider _getImageProvider(String? path) {
+    if (path != null && path.startsWith('http')) {
+      return NetworkImage(path);
+    } else {
+      return const AssetImage('assets/images/avatar.png');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final formattedTime = DateFormat.jm().format(createdAt.toDate());
 
+    // 🎯 AI-specific alignment and styling logic
+    final mainAxisAlignment = isAIResponse
+        ? MainAxisAlignment.start // AI messages are always left-aligned
+        : isMe
+        ? MainAxisAlignment.end
+        : MainAxisAlignment.start;
+
+    final bubbleColor = isAIResponse
+        ? Colors.indigo.shade50 // Distinct, light color for AI
+        : isMe
+        ? theme.colorScheme.primary.withOpacity(0.8)
+        : theme.colorScheme.secondary.withOpacity(0.8);
+
+    final textColor = isAIResponse
+        ? Colors.black87
+        : isMe
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSecondary;
+
     return Stack(
       children: [
         if (isFirstInSequence)
           Positioned(
             top: 15,
-            right: isMe ? 0 : null,
-            child: CircleAvatar(
-              backgroundImage: (userImage != null && userImage!.isNotEmpty)
-                  ? NetworkImage(userImage!)
-                  : const AssetImage('assets/images/avatar.png')
-              as ImageProvider,
+            right: isMe && !isAIResponse ? 0 : null,
+            left: !isMe && !isAIResponse ? 0 : null,
+            child: isAIResponse
+                ? const Padding(
+              padding: EdgeInsets.only(left: 0),
+              child: CircleAvatar(
+                // 🎯 AI Icon
+                child: Icon(Icons.psychology_outlined, size: 24, color: Colors.indigo),
+                backgroundColor: Colors.white,
+                radius: 23,
+              ),
+            )
+                : CircleAvatar(
+              backgroundImage: _getImageProvider(userImage),
               backgroundColor: theme.colorScheme.primary.withAlpha(180),
               radius: 23,
             ),
           ),
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 46),
+          // 🎯 Adjust margin for AI's left-aligned icon
+          margin: EdgeInsets.symmetric(horizontal: isAIResponse ? 50 : 46),
           child: Row(
-            mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: mainAxisAlignment,
             children: [
               Column(
-                crossAxisAlignment:
-                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isAIResponse || !isMe
+                    ? CrossAxisAlignment.start
+                    : CrossAxisAlignment.end,
                 children: [
                   if (isFirstInSequence) const SizedBox(height: 18),
                   if (username != null)
@@ -68,29 +108,28 @@ class MessageBubble extends StatelessWidget {
                         username!,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
+                          color: isAIResponse
+                              ? Colors.indigo.shade700 // AI username color
+                              : theme.colorScheme.onSurface,
                         ),
                       ),
                     ),
-
-                  // The "speech" box surrounding the message.
                   Container(
                     decoration: BoxDecoration(
-                      color: isMe
-                          ? theme.colorScheme.primary.withOpacity(0.8)
-                          : theme.colorScheme.secondary.withOpacity(0.8),
+                      color: bubbleColor,
                       borderRadius: BorderRadius.only(
-                        topLeft: !isMe && isFirstInSequence
+                        // Remove avatar cutout for AI bubbles
+                        topLeft: isAIResponse || (!isMe && isFirstInSequence)
                             ? Radius.zero
                             : const Radius.circular(12),
-                        topRight: isMe && isFirstInSequence
+                        topRight: isAIResponse || (isMe && isFirstInSequence)
                             ? Radius.zero
                             : const Radius.circular(12),
                         bottomLeft: const Radius.circular(12),
                         bottomRight: const Radius.circular(12),
                       ),
                     ),
-                    constraints: const BoxConstraints(maxWidth: 220), // Thoda width badhaya
+                    constraints: const BoxConstraints(maxWidth: 220),
                     padding: const EdgeInsets.symmetric(
                       vertical: 10,
                       horizontal: 14,
@@ -99,37 +138,28 @@ class MessageBubble extends StatelessWidget {
                       vertical: 4,
                       horizontal: 12,
                     ),
-                    // ✅ Bubble ka child ab ek Column hai
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Message Text
                         Text(
                           message,
                           style: TextStyle(
                             height: 1.3,
-                            color: isMe
-                                ? theme.colorScheme.onPrimary
-                                : theme.colorScheme.onSecondary,
+                            color: textColor,
                           ),
                           softWrap: true,
                         ),
                         const SizedBox(height: 4),
-                        // ✅ Time Text (chota aur halka)
                         Text(
                           formattedTime,
                           style: TextStyle(
                             fontSize: 12,
-                            color: (isMe
-                                ? theme.colorScheme.onPrimary
-                                : theme.colorScheme.onSecondary)
-                                .withOpacity(0.7),
+                            color: textColor.withOpacity(0.7),
                           ),
                         ),
                       ],
                     ),
                   ),
-
                 ],
               ),
             ],
